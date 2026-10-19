@@ -31,10 +31,6 @@ SmallFontSize=8
 TitleFontSize=11
 IconSize=11
 
-; Blur: Rainmeter's Blur option has no visible effect on Windows 11 (tested; docs say Windows 7 only).
-; Kept as a switch. The panel relies on the opaque tint instead.
-Blur=0
-
 ; Icon glyphs (Segoe Fluent Icons, Windows 11). Literal characters: this file must stay UTF-16 LE (Rainmeter reads it as such).
 IconClose=
 IconVolume=

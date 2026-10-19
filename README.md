@@ -10,6 +10,10 @@ Status: early development. See [docs/spec.md](docs/spec.md) for the design.
 - `helper/`: source of the small audio helper (C#, Windows Core Audio, built with the compiler that ships with Windows)
 - `docs/`: specification and design notes
 
+## Build
+
+The helper needs no SDK. From a PowerShell prompt in the repository: `helper\build.ps1`. It compiles `Skins\AppMixer\Helper\AppMixerHelper.exe` with the C# compiler that ships with Windows and creates `config.json` from `helper\config.example.json` if missing. Edit that file so each alias matches part of the name of one of your playback devices.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

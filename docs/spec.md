@@ -33,8 +33,8 @@ A single narrow panel (320 px design width), top to bottom:
 **Behavior**
 
 - Sliders: drag or click to set, mouse wheel over a row changes by 5%. Writes are throttled so dragging stays smooth.
-- Only apps with an audio session are listed. Apps that are silent for a while stay listed while open, so their volume can be set before they play.
-- Fixed order (alphabetical, optional pinned apps first). Rows do not jump while dragging.
+- An app is listed while it plays and for a grace period after it stops (60 s by default), or always while it runs if it is pinned in the config. A pinned app that has no audio session yet (Windows only creates one once the app makes sound) is shown as a dimmed row without a slider. Sessions of every active output device are merged by process name, so an app playing on a non-default device is listed too. An `exclude` list hides apps for good.
+- Fixed order: pinned apps first, then alphabetical. Rows do not jump while dragging.
 - At most 6 rows are visible, then the list scrolls. Empty state: "No app is playing audio".
 - Output buttons switch the Windows default playback device and the list refreshes.
 - Toggle with a global hotkey and an optional button. The panel closes on Esc or click outside, with a pinned mode.
@@ -57,7 +57,8 @@ hotkey ──> Rainmeter skin ──commands──> helper ──> Windows Core 
 
 ```text
 helper dump                       write the state file once
-helper watch                      keep rewriting the state file
+helper watch                      rewrite the state file about once per second until stopped
+helper stop                       ask a running watcher to exit
 helper set-volume <app> <0-100>   one app, matched by process name
 helper mute <app> toggle
 helper set-master <0-100>
@@ -66,19 +67,21 @@ helper set-output <alias>         switch the default playback device
 
 Apps are matched by process name, not process id, because one app such as a browser can own several audio sessions. A change applies to all of them.
 
-**Device aliases.** Aliases map to devices by a name substring in a user config file, so each user defines their own outputs. An example config is committed; the personal one is not.
+**Config.** A user config file maps aliases to devices by a name substring, and lists the pinned and excluded apps and the grace period, so each user defines their own setup. An example config is committed; the personal one is not. The grace period needs the watcher: a one-shot `dump` has no memory and lists only apps playing at that moment, plus pinned ones.
 
 **State file (JSON, one writer, UTF-8)**
 
 ```json
 {
   "output": { "alias": "headset", "name": "Headset", "volume": 62, "muted": false },
-  "devices": [ { "alias": "headset", "name": "Headset", "active": true } ],
-  "apps": [ { "name": "Spotify", "volume": 40, "muted": false, "icon": "icons/spotify.png" } ]
+  "devices": [ { "alias": "headset", "name": "Headset", "available": true, "active": true } ],
+  "apps": [ { "process": "Spotify", "name": "Spotify", "volume": 40, "muted": false, "icon": "Icons/spotify.png" } ]
 }
 ```
 
-The helper writes a temporary file and renames it, so the skin never reads a half-written file. Icons are extracted from each executable once and cached.
+`apps[].process` is the key used by commands, `name` is the display name, and `icon` is a path relative to the skin's `@Resources` folder (null when none could be extracted). `devices` lists the configured aliases, `available` means a matching active device exists. The helper writes a temporary file and renames it, so the skin never reads a half-written file, and it rewrites the file only when the content changed. Icons are extracted from each executable once and cached as 64 px PNGs.
+
+**Watch mode.** The skin starts `helper watch` when it loads and runs `helper stop` when it closes, so nothing runs while the panel is hidden. One watcher runs at a time, and it also exits when Rainmeter ends. A one-shot `helper dump` costs about 130 ms, mostly .NET startup, which is why the skin does not spawn it every second.
 
 **Skin internals**
 
@@ -100,7 +103,7 @@ Six milestones, each testable on its own.
 
 1. **Investigate.** Choose the helper. Result: an original helper on Core Audio, with no third-party audio tool or plugin (the NirSoft command line tool and the AppVolume plugin were evaluated and worked, but their licenses do not suit an open repository).
 2. **Static panel.** Theme and three fake rows with output buttons. Done.
-3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output.
+3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output. Done, including the watch mode (the list shows the first 6 apps, scrolling comes with the polish milestone).
 4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes.
 5. **Output switching.** The three buttons change the default device through the configured aliases.
 6. **Polish.** Hotkey toggle, close on Esc or outside click, empty state, pinned apps, performance check, optional watch mode.

@@ -1,0 +1,10 @@
+{
+  "devices": [
+    { "alias": "headset", "label": "Headset", "match": "Headset" },
+    { "alias": "stereo", "label": "Stereo", "match": "Speakers" },
+    { "alias": "monitor", "label": "Monitor", "match": "HDMI" }
+  ],
+  "pinned": [],
+  "exclude": [],
+  "graceSeconds": 60
+}
