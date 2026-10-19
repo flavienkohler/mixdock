@@ -25,7 +25,7 @@ namespace AppMixer
             {
                 var options = Options.Parse(args);
                 if (command == "stop") return Watcher.Stop() ? 0 : 1;
-                var config = Config.Load(options.ConfigPath);
+                var config = Config.Load(options.ConfigPath, options.OrderPath);
                 if (command == "watch") return Watcher.Run(config, options);
                 if (command == "set-output")
                 {
@@ -54,6 +54,14 @@ namespace AppMixer
 
         public static string Dump(AudioModel audio, Config config, Options options)
         {
+            List<string> shownPinned, shownOthers;
+            return Build(audio, config, options, out shownPinned, out shownOthers);
+        }
+
+        // Builds the state JSON. `shownPinned` and `shownOthers` receive the listed apps of each group, in display order.
+        public static string Build(AudioModel audio, Config config, Options options,
+                                   out List<string> shownPinned, out List<string> shownOthers)
+        {
             var devices = audio.ListRenderDevices();
             var apps = audio.ReadApps();
             float masterVolume; bool masterMuted;
@@ -80,14 +88,18 @@ namespace AppMixer
                 (a.Active || config.IsPinned(a.Process) || (now - a.LastActive).TotalSeconds < config.GraceSeconds));
 
             // A pinned app that is running but has no audio session yet is listed as idle (no volume to control).
-            foreach (string name in config.Pinned)
+            foreach (string name in config.PinnedOrder.ToList())
             {
                 if (visible.Exists(a => string.Equals(a.Process, name, StringComparison.OrdinalIgnoreCase))) continue;
                 AppInfo idle = audio.FindIdle(name);
                 if (idle != null && !config.IsExcluded(idle.Process)) { idle.Idle = true; visible.Add(idle); }
             }
+            // Pinned apps first. Inside each group: the order the user chose, then alphabetical.
             visible = visible.OrderBy(a => config.IsPinned(a.Process) ? 0 : 1)
+                             .ThenBy(a => config.OrderIndex(a.Process))
                              .ThenBy(a => a.Display, StringComparer.CurrentCultureIgnoreCase).ToList();
+            shownPinned = visible.Where(a => config.IsPinned(a.Process)).Select(a => a.Process).ToList();
+            shownOthers = visible.Where(a => !config.IsPinned(a.Process)).Select(a => a.Process).ToList();
 
             var appList = new List<object>();
             foreach (var app in visible)
@@ -98,6 +110,7 @@ namespace AppMixer
                     { "volume", (int)Math.Round(app.Volume * 100) },
                     { "muted", app.Muted },
                     { "active", app.Active },
+                    { "pinned", config.IsPinned(app.Process) },
                     { "idle", app.Idle },
                     { "icon", Icons.Cache(app.Process, app.Path, options.IconsDir) }
                 });
@@ -130,7 +143,7 @@ namespace AppMixer
     public class Options
     {
         public bool Stdout, All; // All: list every session, ignoring pinned/grace/exclude (for debugging)
-        public string StatePath, IconsDir, ConfigPath, CommandsDir;
+        public string StatePath, IconsDir, ConfigPath, CommandsDir, OrderPath;
         public string Skin = "AppMixer"; // name of the Rainmeter skin to notify
 
         public static Options Parse(string[] args)
@@ -140,6 +153,7 @@ namespace AppMixer
                 StatePath = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\State\state.json")),
                 IconsDir = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\Icons")),
                 CommandsDir = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\Commands")),
+                OrderPath = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\State\order.txt")),
                 ConfigPath = Path.Combine(exeDir, "config.json")
             };
             for (int i = 1; i < args.Length; i++)

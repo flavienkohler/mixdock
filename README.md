@@ -8,6 +8,7 @@ Status: early development. See [docs/spec.md](docs/spec.md) for the design.
 
 - `Skins/AppMixer/`: the Rainmeter skin (point Rainmeter's skin path at `Skins/`, or copy this folder into your skins folder)
 - `helper/`: source of the small audio helper (C#, Windows Core Audio, built with the compiler that ships with Windows)
+- `tools/`: `generate-rows.ps1` regenerates `Rows.inc`, the pool of identical app row slots (Rainmeter cannot create meters at runtime)
 - `docs/`: specification and design notes
 
 ## Build

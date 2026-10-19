@@ -35,6 +35,13 @@ namespace AppMixer
             return p.X;
         }
 
+        public static int CursorY()
+        {
+            Point p;
+            GetCursorPos(out p);
+            return p.Y;
+        }
+
         // Display scale of the monitor under the cursor (1.0 at 100%, 1.25 at 125%).
         public static double CursorScale()
         {

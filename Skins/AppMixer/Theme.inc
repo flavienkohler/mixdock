@@ -6,7 +6,9 @@
 Scale=1
 
 ; Panel
-PanelW=320
+PanelW=340
+; Width of the gutter left of the app icons (pin button and reorder grip)
+Gutter=20
 PanelH=336
 Radius=12
 Pad=16
@@ -22,6 +24,11 @@ ButtonColor=255,255,255,18
 Accent=96,165,250,255
 AccentText=14,18,26,255
 MutedColor=255,255,255,90
+PinOffColor=255,255,255,55
+PinOffHoverColor=255,255,255,150
+PinOnHoverColor=160,205,255,255
+GrabColor=255,255,255,42
+GrabHoverColor=255,255,255,150
 
 ; Fonts
 Font=Segoe UI Variable Text
@@ -35,3 +42,5 @@ IconSize=11
 IconClose=
 IconVolume=
 IconMute=
+IconPin=
+IconUnpin=

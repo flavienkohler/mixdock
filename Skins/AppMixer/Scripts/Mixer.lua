@@ -20,6 +20,11 @@ local Json
 local statePath
 local rows = {}   -- slot number -> app shown in it
 local outputs = {} -- the footer buttons, from the state's device list
+local pinnedShown, otherShown = 0, 0 -- number of listed apps in each group
+local pinHover = {} -- slot number -> true while the cursor is on its pin button
+local lastVolume = {} -- process name -> last volume (0-100) seen while the app had a session
+-- Button that is currently pressed (e.g. 'mute:2'); see Click().
+local pressedButton
 local master = { volume = 0 }
 local commandSeq = 0
 local lastRaw
@@ -66,36 +71,78 @@ local function clampPercent(v)
   return v
 end
 
--- Icon glyphs are passed as variable names ('#IconMute#'): Rainmeter expands them, whereas a glyph read
--- through Lua would be mangled by the codepage.
+-- Same color with another opacity: 'r,g,b,a' -> 'r,g,b,alpha'.
+local function withAlpha(color, alpha)
+  return (color:gsub(',%d+$', ',' .. alpha))
+end
+
 local function hideRow(i)
   rows[i] = nil
-  for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile', 'R' .. i .. 'Hit' }) do
+  for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile', 'R' .. i .. 'Hit',
+                           'R' .. i .. 'Pin', 'R' .. i .. 'Grab' }) do
     setVisible(group, false)
   end
 end
 
+-- The pin button is grey and translucent when the app is not pinned, bright (accent colored) when it is,
+-- and a little brighter while the cursor is on it.
+local function paintPin(i)
+  local app = rows[i]
+  if not app then return end
+  local color
+  if app.pinned then
+    color = pinHover[i] and theme('PinOnHoverColor') or theme('Accent')
+  else
+    color = pinHover[i] and theme('PinOffHoverColor') or theme('PinOffColor')
+  end
+  setOption('R' .. i .. 'PinGlyph', 'FontColor', color)
+end
+
+-- Icon glyphs are passed as variable names ('#IconMute#'): Rainmeter expands them, whereas a glyph read
+-- through Lua would be mangled by the codepage.
 local function renderRow(i, app)
   rows[i] = app
   local prefix = 'R' .. i
   local idle = app.idle == true -- pinned and running, but no audio session yet: dimmed, nothing to control
   local muted = app.muted == true
+  local silent = app.active ~= true -- has a session but nothing is playing (e.g. Discord after a call): dimmed, still adjustable
   local name = app.name or app.process or '?'
 
   setOption(prefix .. 'Name', 'Text', name)
-  setOption(prefix .. 'Name', 'FontColor', (muted or idle) and theme('MutedColor') or theme('TextColor'))
-  setOption(prefix .. 'Percent', 'Text', idle and '' or (clampPercent(app.volume) .. '%'))
+  setOption(prefix .. 'Name', 'FontColor',
+    (muted or idle) and theme('MutedColor') or (silent and theme('TextDimColor') or theme('TextColor')))
+  -- An app without a session has no volume to read, so its slider shows the last volume seen for it, if any.
+  local volume
+  if idle then
+    volume = lastVolume[app.process]
+  else
+    volume = clampPercent(app.volume)
+    lastVolume[app.process] = volume
+  end
+  local dimmed = idle or silent -- not playing: the slider keeps its place but is drawn faded
+
+  setOption(prefix .. 'Percent', 'Text', volume and (volume .. '%') or '')
   setOption(prefix .. 'Percent', 'FontColor', muted and theme('MutedColor') or theme('TextDimColor'))
   setOption(prefix .. 'Mute', 'Text', idle and '' or (muted and '#IconMute#' or '#IconVolume#'))
   setOption(prefix .. 'Mute', 'FontColor', muted and theme('MutedColor') or theme('TextColor'))
-  setVariable(prefix .. 'Vol', idle and 0 or clampPercent(app.volume))
-  setVariable(prefix .. 'Track', idle and TRANSPARENT or theme('TrackColor'))
-  setVariable(prefix .. 'Fill', idle and TRANSPARENT or (muted and theme('MutedColor') or theme('Accent')))
-  setVariable(prefix .. 'Thumb', idle and TRANSPARENT or (muted and '160,160,168,255' or '255,255,255,255'))
+  setVariable(prefix .. 'Vol', volume or 0)
+  setVariable(prefix .. 'Track', theme('TrackColor'))
+  local fill, thumb
+  if volume == nil then
+    fill, thumb = TRANSPARENT, TRANSPARENT -- nothing known yet: just the empty track
+  elseif muted then
+    fill, thumb = theme('MutedColor'), '160,160,168,255'
+  elseif dimmed then
+    fill, thumb = withAlpha(theme('Accent'), 105), '255,255,255,140'
+  else
+    fill, thumb = theme('Accent'), '255,255,255,255'
+  end
+  setVariable(prefix .. 'Fill', fill)
+  setVariable(prefix .. 'Thumb', thumb)
 
   setVariable(prefix .. 'Tile', idle and DIM_TILE or tileColor(app.process or name))
   setOption(prefix .. 'Letter', 'Text', name:sub(1, 1):upper())
-  setOption(prefix .. 'Img', 'ImageAlpha', idle and '110' or '255')
+  setOption(prefix .. 'Img', 'ImageAlpha', idle and '110' or (silent and '150' or '255'))
 
   local hasIcon = app.icon ~= nil
   if hasIcon then setOption(prefix .. 'Img', 'ImageName', SKIN:ReplaceVariables('#@#') .. app.icon) end
@@ -103,6 +150,13 @@ local function renderRow(i, app)
   setVisible(prefix .. 'Img', hasIcon)
   setVisible(prefix .. 'Tile', not hasIcon)
   setVisible(prefix .. 'Hit', not idle)
+
+  -- Gutter: the pin button is always there, the reorder grip only when the app's group (pinned or other apps)
+  -- has at least two apps to reorder.
+  local pinned = app.pinned == true
+  paintPin(i)
+  setVisible(prefix .. 'Pin', true)
+  setVisible(prefix .. 'Grab', (pinned and pinnedShown or otherShown) >= 2)
 end
 
 local function renderFooter(devices)
@@ -132,6 +186,10 @@ end
 local function render(state)
   local apps = state.apps or {}
   local shown = math.min(#apps, MAX_ROWS)
+  pinnedShown, otherShown = 0, 0
+  for i = 1, shown do
+    if apps[i].pinned then pinnedShown = pinnedShown + 1 else otherShown = otherShown + 1 end
+  end
 
   local output = state.output or {}
   local masterMuted = output.muted == true
@@ -210,6 +268,7 @@ end
 -- both ends, so the press position is converted to a track percentage. The helper then follows the cursor
 -- until the button is released.
 function Press(i, percentOfHitArea)
+  pressedButton = nil
   local who = target(i)
   if not who then return end
   local scale = tonumber(SKIN:GetVariable('Scale')) or 1
@@ -258,6 +317,38 @@ function Wheel(i, direction)
   end
 end
 
+-- The cursor entered (on = 1) or left (on = 0) the pin button of a row: brighten it.
+function PinHover(i, on)
+  if not rows[i] then return end
+  pinHover[i] = on == 1
+  if on == 0 then pressedButton = nil end -- moving off the button cancels a click in progress
+  paintPin(i)
+  SKIN:Bang('!UpdateMeter', 'R' .. i .. 'PinGlyph')
+  SKIN:Bang('!Redraw')
+end
+
+-- The cursor is on (on = 1) or left (on = 0) the reorder handle of a row: make it a little more visible.
+function GrabHover(i, on)
+  setVariable('R' .. i .. 'Grab', on == 1 and theme('GrabHoverColor') or theme('GrabColor'))
+  SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Grab')
+  SKIN:Bang('!Redraw')
+end
+
+-- Press on the reorder handle: the helper moves the app inside its group as the cursor moves, one place per row height.
+function Reorder(i)
+  pressedButton = nil
+  local app = rows[i]
+  if not app then return end
+  local scale = tonumber(SKIN:GetVariable('Scale')) or 1
+  send('reorder', app.process, tostring(ROW_H * scale))
+end
+
+-- Click on the pin button of a row: pin the app, or unpin it if it is pinned.
+function Pin(i)
+  local app = rows[i]
+  if app then send('pin', app.process) end
+end
+
 -- Output button k (1 to 3) in the footer: make that device the default playback device.
 function Output(k)
   local device = outputs[k]
@@ -269,6 +360,24 @@ function Mute(i)
   local who = target(i)
   if not who then return end
   if i == 0 then send('master-mute') else send('mute', who, 'toggle') end
+end
+
+-- Clickable buttons call Down() when the mouse goes down on them and Click() when it comes up. Rainmeter fires the
+-- mouse-up action of whatever button is under the cursor, even after a drag that started elsewhere, so a slider or
+-- reorder drag released over a pin or mute button would click it. A click only counts if the press began on that button.
+function Down(kind, i)
+  pressedButton = kind .. ':' .. i
+end
+
+function Cancel()
+  pressedButton = nil
+end
+
+function Click(kind, i)
+  local pressed = pressedButton == kind .. ':' .. i
+  pressedButton = nil
+  if not pressed then return end
+  if kind == 'pin' then Pin(i) elseif kind == 'mute' then Mute(i) elseif kind == 'output' then Output(i) end
 end
 
 function Initialize()
