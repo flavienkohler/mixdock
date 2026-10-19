@@ -28,6 +28,8 @@ local pressedButton
 local master = { volume = 0 }
 local commandSeq = 0
 local lastRaw
+local accent, accentText, accentHover -- the highlight color, the text color on it, and a lighter shade for hover
+local settings = {} -- user choices kept in Settings.inc: AccentMode, AccentCustom, BgAlpha
 local cache = {} -- last value sent per target, so unchanged values cost no bang
 
 local function setOption(meter, option, value)
@@ -76,6 +78,81 @@ local function withAlpha(color, alpha)
   return (color:gsub(',%d+$', ',' .. alpha))
 end
 
+-- ---- Settings and accent color ----
+
+local PRESETS = { blue = '60A5FA', violet = 'A78BFA', green = '4ADE80', orange = 'FB923C', pink = 'F472B6', red = 'F87171' }
+local SETTING_KEYS = { 'AccentMode', 'AccentCustom', 'BgAlpha' }
+local OPACITIES = { 100, 90, 80, 70, 60, 50 } -- percent, the choices of the menu
+
+-- Panel opacity in percent -> the alpha value (0-255) used in the background color.
+local function alphaOf(percent)
+  return math.floor(percent * 2.55 + 0.5)
+end
+
+-- 'RRGGBB', '#RRGGBB' or 'r,g,b' -> r, g, b (or nil)
+local function parseColor(text)
+  text = tostring(text or ''):gsub('%s', '')
+  local r, g, b = text:match('^(%d+),(%d+),(%d+)')
+  if r then return tonumber(r), tonumber(g), tonumber(b) end
+  local hex = text:gsub('^#', '')
+  if #hex == 6 and hex:match('^%x+$') then
+    return tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16)
+  end
+end
+
+-- The Windows accent color: a DWORD in the registry holding alpha, blue, green, red (one byte each).
+local function windowsAccent()
+  local measure = SKIN:GetMeasure('WinAccent')
+  local n = measure and measure:GetValue() or 0
+  if n <= 0 then return nil end
+  return n % 256, math.floor(n / 256) % 256, math.floor(n / 65536) % 256
+end
+
+-- Works out the accent color from the settings. Returns true when it changed.
+local function updateAccent()
+  local r, g, b
+  if settings.AccentMode == 'custom' then r, g, b = parseColor(settings.AccentCustom) else r, g, b = windowsAccent() end
+  if not r then r, g, b = parseColor(PRESETS.blue) end
+
+  local color = string.format('%d,%d,%d,255', r, g, b)
+  if color == accent then return false end
+  accent = color
+  local luminance = 0.299 * r + 0.587 * g + 0.114 * b
+  accentText = luminance > 150 and '14,18,26,255' or '255,255,255,255'
+  -- lighter shade for hover: a third of the way to white
+  accentHover = string.format('%d,%d,%d,255', math.floor(r + (255 - r) / 3), math.floor(g + (255 - g) / 3), math.floor(b + (255 - b) / 3))
+  return true
+end
+
+local function saveSettings()
+  local file = io.open(SKIN:ReplaceVariables('#CURRENTPATH#Settings.inc'), 'wb')
+  if not file then return end
+  file:write('; AppMixer settings. The skin\'s right-click menu writes this file; you can also edit it by hand.\r\n')
+  file:write('; AccentMode: auto (Windows accent color) or custom. AccentCustom: RRGGBB (for example 3B82F6) or r,g,b.\r\n')
+  file:write('; BgAlpha: opacity of the panel, 110 (see-through) to 255 (solid).\r\n\r\n[Variables]\r\n')
+  for _, key in ipairs(SETTING_KEYS) do file:write(key .. '=' .. tostring(settings[key]) .. '\r\n') end
+  file:close()
+end
+
+-- Puts a check mark (">") in front of the current accent and opacity choices in the right-click menu.
+local function updateMenuMarks()
+  local custom = settings.AccentMode == 'custom'
+  local chosen = custom and tostring(settings.AccentCustom):upper():gsub('^#', '') or nil
+  local marks = { Auto = not custom, Custom = custom }
+  for name, hex in pairs(PRESETS) do
+    local isPreset = custom and chosen == hex
+    marks[name:sub(1, 1):upper() .. name:sub(2)] = isPreset
+    if isPreset then marks.Custom = false end
+  end
+  for _, percent in ipairs(OPACITIES) do marks['Op' .. percent] = settings.BgAlpha == alphaOf(percent) end
+  for name, on in pairs(marks) do SKIN:Bang('!SetVariable', 'Mark' .. name, on and '> ' or '') end
+end
+
+local function loadSettings()
+  settings.AccentMode = theme('AccentMode') == 'custom' and 'custom' or 'auto'
+  settings.AccentCustom = theme('AccentCustom')
+  settings.BgAlpha = tonumber(theme('BgAlpha')) or 238
+end
 local function hideRow(i)
   rows[i] = nil
   for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile', 'R' .. i .. 'Hit',
@@ -91,7 +168,7 @@ local function paintPin(i)
   if not app then return end
   local color
   if app.pinned then
-    color = pinHover[i] and theme('PinOnHoverColor') or theme('Accent')
+    color = pinHover[i] and accentHover or accent
   else
     color = pinHover[i] and theme('PinOffHoverColor') or theme('PinOffColor')
   end
@@ -133,9 +210,9 @@ local function renderRow(i, app)
   elseif muted then
     fill, thumb = theme('MutedColor'), '160,160,168,255'
   elseif dimmed then
-    fill, thumb = withAlpha(theme('Accent'), 105), '255,255,255,140'
+    fill, thumb = withAlpha(accent, 105), '255,255,255,140'
   else
-    fill, thumb = theme('Accent'), '255,255,255,255'
+    fill, thumb = accent, '255,255,255,255'
   end
   setVariable(prefix .. 'Fill', fill)
   setVariable(prefix .. 'Thumb', thumb)
@@ -166,7 +243,7 @@ local function renderFooter(devices)
     if device then
       local fill, text = theme('ButtonColor'), theme('TextColor')
       if device.active then
-        fill, text = theme('Accent'), theme('AccentText')
+        fill, text = accent, accentText
       elseif not device.available then
         text = theme('MutedColor')
       end
@@ -198,7 +275,7 @@ local function render(state)
   setOption('MasterIcon', 'Text', masterMuted and '#IconMute#' or '#IconVolume#')
   master.volume = clampPercent(output.volume)
   setVariable('MasterVol', master.volume)
-  setVariable('MasterFill', masterMuted and theme('MutedColor') or theme('Accent'))
+  setVariable('MasterFill', masterMuted and theme('MutedColor') or accent)
 
   for i = 1, MAX_ROWS do
     if i <= shown then
@@ -380,10 +457,58 @@ function Click(kind, i)
   if kind == 'pin' then Pin(i) elseif kind == 'mute' then Mute(i) elseif kind == 'output' then Output(i) end
 end
 
+-- ---- Right-click menu actions ----
+
+-- Works out the accent again; when it changed, publishes it and forces a repaint from the state file.
+local function refreshAccent()
+  if not updateAccent() then return false end
+  SKIN:Bang('!SetVariable', 'Accent', accent)
+  SKIN:Bang('!SetVariable', 'AccentText', accentText)
+  lastRaw = nil
+  return true
+end
+
+function SetAccent(name)
+  if name == 'auto' then
+    settings.AccentMode = 'auto'
+  elseif name == 'custom' then
+    settings.AccentMode = 'custom'
+  else
+    settings.AccentMode = 'custom'
+    settings.AccentCustom = PRESETS[name] or settings.AccentCustom
+  end
+  saveSettings()
+  refreshAccent()
+  updateMenuMarks()
+  readState()
+  if name == 'custom' then EditSettings() end
+end
+
+-- Sets the panel opacity (a percentage) and keeps it.
+function SetOpacity(percent)
+  settings.BgAlpha = alphaOf(tonumber(percent) or 100)
+  local color = theme('BgRGB') .. ',' .. settings.BgAlpha
+  SKIN:Bang('!SetVariable', 'BgAlpha', settings.BgAlpha)
+  SKIN:Bang('!SetVariable', 'BgColor', color)
+  SKIN:Bang('!UpdateMeter', 'Background')
+  SKIN:Bang('!Redraw')
+  saveSettings()
+  updateMenuMarks()
+end
+-- Opens the settings file for editing (a custom accent color is typed there).
+function EditSettings()
+  saveSettings()
+  SKIN:Bang('["notepad.exe" "' .. SKIN:ReplaceVariables('#CURRENTPATH#Settings.inc') .. '"]')
+end
 function Initialize()
   Json = dofile(SKIN:ReplaceVariables('#CURRENTPATH#Scripts\\Json.lua'))
   statePath = SKIN:ReplaceVariables('#@#State\\state.json')
   math.randomseed(os.time())
+  loadSettings()
+  updateAccent()
+  SKIN:Bang('!SetVariable', 'Accent', accent)
+  SKIN:Bang('!SetVariable', 'AccentText', accentText)
+  updateMenuMarks()
 end
 
 -- Called by the helper right after it wrote the state.
@@ -393,6 +518,7 @@ end
 
 -- Slow fallback in case a notification was missed.
 function Update()
+  if refreshAccent() then updateMenuMarks() end -- follows a change of the Windows accent color
   readState()
   return 0
 end

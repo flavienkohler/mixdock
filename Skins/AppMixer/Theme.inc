@@ -14,19 +14,23 @@ Radius=12
 Pad=16
 
 ; Colors (R,G,B,A)
-BgColor=24,24,28,238
+BgRGB=24,24,28
+BgAlpha=230
+BgColor=#BgRGB#,#BgAlpha#
 BorderColor=255,255,255,40
 TrackColor=255,255,255,40
 TextColor=255,255,255,235
 TextDimColor=255,255,255,140
 DividerColor=255,255,255,25
 ButtonColor=255,255,255,18
+; Highlight color. AccentMode=auto follows the Windows accent color, custom uses AccentCustom (RRGGBB or r,g,b).
+AccentMode=auto
+AccentCustom=60A5FA
 Accent=96,165,250,255
 AccentText=14,18,26,255
 MutedColor=255,255,255,90
 PinOffColor=255,255,255,55
 PinOffHoverColor=255,255,255,150
-PinOnHoverColor=160,205,255,255
 GrabColor=255,255,255,42
 GrabHoverColor=255,255,255,150
 

@@ -11,3 +11,5 @@ Skins/AppMixer/Helper/config.json
 Skins/@Vault/
 Skins/@Backup/
 Skins/AppMixer/@Resources/Commands/
+# user settings written by the skin's right-click menu
+Skins/AppMixer/Settings.inc

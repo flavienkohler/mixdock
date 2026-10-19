@@ -121,7 +121,7 @@ Milestones, each testable on its own.
 4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes. Done.
 5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `AppMixerHelper set-output <alias>`. Done.
 6. **Pinning, reordering and dimming.** Pin button, reorder grips, dimmed apps that are not playing. Done.
-7. **Settings and themes.** An accent color (the Windows accent color by default, presets, or any custom color), plus panel opacity and corner radius, changed from the skin's context menu and saved in a settings file.
+7. **Settings and themes.** An accent color (the Windows accent color by default, presets, or any custom color) and the panel opacity, changed from the skin's right-click menu and saved in `Settings.inc`. The Windows accent is read from the registry (`HKCU\Software\Microsoft\Windows\DWM\AccentColor`, a DWORD with alpha, blue, green and red bytes) through a Rainmeter Registry measure, and followed live. The text color on the accent (dark or white) is chosen from its luminance. Defaults live in `Theme.inc`; `Settings.inc` overrides them and is written by the skin itself, because `!WriteKeyValue` cannot create a missing file.
 8. **Compact mode.** A minimal layout: icons without names, no percentages, smaller output buttons, less space.
 9. **Publish.** README with screenshots and setup steps, a last cleanup, and a first tagged release.
 

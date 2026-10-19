@@ -15,6 +15,14 @@ Status: early development. See [docs/spec.md](docs/spec.md) for the design.
 
 The helper needs no SDK. From a PowerShell prompt in the repository: `helper\build.ps1`. It compiles `Skins\AppMixer\Helper\AppMixerHelper.exe` with the C# compiler that ships with Windows and creates `config.json` from `helper\config.example.json` if missing. Edit that file so each alias matches part of the name of one of your playback devices.
 
+## Settings
+
+Right-click the panel and open **Custom skin actions**:
+
+- **Accent**: the highlight color. By default it follows the Windows accent color (and changes with it); pick a preset, or choose *Custom* to type any color in the settings file (`RRGGBB`, for example `3B82F6`, or `r,g,b`).
+- **Opacity**: from 100% (solid) down to 50%, with a check mark on the current choice.
+- **Open settings file**: opens `Skins/AppMixer/Settings.inc`, which the menu writes and you can also edit by hand. It is created on the first change and is not tracked by git. The built-in defaults live in `Theme.inc` (colors, sizes, fonts).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
