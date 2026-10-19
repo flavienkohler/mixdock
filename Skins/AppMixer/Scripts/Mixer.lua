@@ -19,6 +19,7 @@ local WHEEL_STEP = 5
 local Json
 local statePath
 local rows = {}   -- slot number -> app shown in it
+local outputs = {} -- the footer buttons, from the state's device list
 local master = { volume = 0 }
 local commandSeq = 0
 local lastRaw
@@ -151,7 +152,8 @@ local function render(state)
 
   if shown == 0 then renderMessage('No app is playing audio') else setVisible('Empty', false) end
 
-  renderFooter(state.devices or {})
+  outputs = state.devices or {}
+  renderFooter(outputs)
 
   -- The panel grows and shrinks with the number of rows (at least one slot for the empty message).
   local dividerY = ROWS_TOP + math.max(shown, 1) * ROW_H + 4
@@ -254,6 +256,12 @@ function Wheel(i, direction)
     rows[i].volume = value -- remembered right away, so quick successive notches add up
     send('volume', who, tostring(value))
   end
+end
+
+-- Output button k (1 to 3) in the footer: make that device the default playback device.
+function Output(k)
+  local device = outputs[k]
+  if device and device.available and not device.active then send('output', device.alias) end
 end
 
 -- Mute button of a row (0 = master).

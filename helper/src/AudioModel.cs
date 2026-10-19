@@ -285,6 +285,17 @@ namespace AppMixer
             finally { Marshal.ReleaseComObject(device); }
         }
 
+        // Makes the playback device matching an alias from the config the default one. Returns false if none is active.
+        public bool SetOutput(Config config, string alias)
+        {
+            DeviceEntry entry = config.Devices.Find(d => string.Equals(d.Alias, alias, StringComparison.OrdinalIgnoreCase));
+            if (entry == null) return false;
+            DeviceInfo device = ListRenderDevices().Find(d => d.Name.IndexOf(entry.Match, StringComparison.OrdinalIgnoreCase) >= 0);
+            if (device == null) return false;
+            if (!device.IsDefault) DefaultDevice.Set(device.Id);
+            return true;
+        }
+
         static float Clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
         // A running process that has no audio session (yet). Used to list pinned apps while they are silent.

@@ -69,7 +69,7 @@ mute <app> <toggle|on|off>
 master <0-100>                    master volume of the default output
 master-mute
 drag <app|@master> <start> <width>  set the start value, then follow the cursor until the left button is released
-output <alias>                    switch the default playback device (planned)
+output <alias>                    make the device matching the alias the default playback device (all three roles)
 ```
 
 Apps are matched by process name, not process id, because one app such as a browser can own several audio sessions. A change applies to all of them, on every playback device.
@@ -118,7 +118,7 @@ Six milestones, each testable on its own.
 2. **Static panel.** Theme and three fake rows with output buttons. Done.
 3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output. Done, including the watch mode (the list shows the first 6 apps, scrolling comes with the polish milestone).
 4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes.
-5. **Output switching.** The three buttons change the default device through the configured aliases.
+5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `AppMixerHelper set-output <alias>`.
 6. **Polish.** Hotkey toggle, close on Esc or outside click, empty state, pinned apps, performance check, optional watch mode.
 
 **Acceptance tests**

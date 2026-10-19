@@ -4,6 +4,7 @@
 //   mute     <process> <toggle|on|off>
 //   master   <0-100>
 //   master-mute
+//   output   <alias>
 //   drag     <process|@master> <start 0-100> <slider width in design pixels>
 //
 // The watcher picks files up as soon as they appear, so a click costs no process start.
@@ -42,7 +43,7 @@ namespace AppMixer
         }
 
         // Runs every pending command, oldest first. `publish` writes the state and tells the skin.
-        public void RunPending(AudioModel audio, Action publish, Action<string, int> preview)
+        public void RunPending(AudioModel audio, Config config, Action publish, Action<string, int> preview)
         {
             string[] files = Directory.GetFiles(dir, "*.cmd");
             Array.Sort(files, StringComparer.Ordinal);
@@ -51,12 +52,12 @@ namespace AppMixer
                 string text = Read(file);
                 TryDelete(file);
                 if (string.IsNullOrWhiteSpace(text)) continue;
-                try { Execute(audio, text.Trim().Split('\t'), publish, preview); }
+                try { Execute(audio, config, text.Trim().Split('\t'), publish, preview); }
                 catch (Exception e) { Console.Error.WriteLine("command failed: " + e.Message); }
             }
         }
 
-        static void Execute(AudioModel audio, string[] c, Action publish, Action<string, int> preview)
+        static void Execute(AudioModel audio, Config config, string[] c, Action publish, Action<string, int> preview)
         {
             switch (c[0])
             {
@@ -71,6 +72,9 @@ namespace AppMixer
                     break;
                 case "master-mute":
                     audio.ToggleMasterMute();
+                    break;
+                case "output":
+                    audio.SetOutput(config, c[1]);
                     break;
                 case "drag":
                     Drag(audio, c[1], (int)Math.Round(double.Parse(c[2], System.Globalization.CultureInfo.InvariantCulture)),

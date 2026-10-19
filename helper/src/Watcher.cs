@@ -39,7 +39,7 @@ namespace AppMixer
                     var handles = new WaitHandle[] { stop, commands.Signal };
                     do
                     {
-                        commands.RunPending(audio, publish, (target, percent) => RainmeterLink.Preview(options.Skin, target, percent));
+                        commands.RunPending(audio, config, publish, (target, percent) => RainmeterLink.Preview(options.Skin, target, percent));
                         publish();
                     }
                     while (WaitHandle.WaitAny(handles, IntervalMs) != 0 && !AllExited(rainmeter));

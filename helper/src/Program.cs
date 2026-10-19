@@ -16,9 +16,9 @@ namespace AppMixer
         static int Main(string[] args)
         {
             string command = args.Length > 0 ? args[0] : "";
-            if (command != "dump" && command != "watch" && command != "stop")
+            if (command != "dump" && command != "watch" && command != "stop" && command != "set-output")
             {
-                Console.Error.WriteLine("usage: AppMixerHelper dump|watch|stop [--stdout] [--state <file>] [--icons <dir>] [--config <file>]");
+                Console.Error.WriteLine("usage: AppMixerHelper dump|watch|stop|set-output <alias> [--stdout] [--state <file>] [--icons <dir>] [--config <file>]");
                 return 2;
             }
             try
@@ -27,6 +27,11 @@ namespace AppMixer
                 if (command == "stop") return Watcher.Stop() ? 0 : 1;
                 var config = Config.Load(options.ConfigPath);
                 if (command == "watch") return Watcher.Run(config, options);
+                if (command == "set-output")
+                {
+                    using (var audio = new AudioModel())
+                        return args.Length > 1 && audio.SetOutput(config, args[1]) ? 0 : 1;
+                }
                 string json = Dump(config, options);
                 if (options.Stdout) Console.Out.WriteLine(json);
                 else WriteAtomically(options.StatePath, json);
