@@ -1,0 +1,12 @@
+CLAUDE.md
+# build output and runtime state
+helper/bin/
+helper/obj/
+Skins/AppMixer/Helper/*.exe
+Skins/AppMixer/@Resources/State/
+Skins/AppMixer/@Resources/Icons/
+# personal device aliases (an example config is committed instead)
+Skins/AppMixer/Helper/config.json
+# Rainmeter-generated folders
+Skins/@Vault/
+Skins/@Backup/
