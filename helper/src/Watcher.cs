@@ -1,4 +1,4 @@
-// Long-running mode: rewrites the state file about once per second while the panel is open.
+// Long-running mode: keeps the state file current and carries out the skin's commands.
 // Only one watcher runs at a time; `stop` asks it to exit. It also exits on its own when Rainmeter is gone.
 
 using System;
@@ -18,21 +18,31 @@ namespace AppMixer
             using (var mutex = new Mutex(false, MutexName))
             {
                 if (!Acquire(mutex)) return 0; // already watching
+                Input.MakeDpiAware();
                 using (var stop = new EventWaitHandle(false, EventResetMode.ManualReset, StopEventName))
                 using (var audio = new AudioModel())
+                using (var commands = new Commands(options.CommandsDir))
                 {
                     string last = null;
                     Process[] rainmeter = Process.GetProcessesByName("Rainmeter");
-                    do
+
+                    // Writes the state if it changed and tells the skin to re-read it.
+                    Action publish = () =>
                     {
                         string json = Program.Dump(audio, config, options);
-                        if (json != last)
-                        {
-                            Program.WriteAtomically(options.StatePath, json);
-                            last = json;
-                        }
+                        if (json == last) return;
+                        Program.WriteAtomically(options.StatePath, json);
+                        last = json;
+                        RainmeterLink.Refresh(options.Skin);
+                    };
+
+                    var handles = new WaitHandle[] { stop, commands.Signal };
+                    do
+                    {
+                        commands.RunPending(audio, publish, (target, percent) => RainmeterLink.Preview(options.Skin, target, percent));
+                        publish();
                     }
-                    while (!stop.WaitOne(IntervalMs) && !AllExited(rainmeter));
+                    while (WaitHandle.WaitAny(handles, IntervalMs) != 0 && !AllExited(rainmeter));
                 }
                 mutex.ReleaseMutex();
             }

@@ -57,15 +57,28 @@ hotkey ──> Rainmeter skin ──commands──> helper ──> Windows Core 
 
 ```text
 helper dump                       write the state file once
-helper watch                      rewrite the state file about once per second until stopped
+helper watch                      keep the state file current and carry out commands until stopped
 helper stop                       ask a running watcher to exit
-helper set-volume <app> <0-100>   one app, matched by process name
-helper mute <app> toggle
-helper set-master <0-100>
-helper set-output <alias>         switch the default playback device
 ```
 
-Apps are matched by process name, not process id, because one app such as a browser can own several audio sessions. A change applies to all of them.
+While the watcher runs, the skin sends commands as small tab-separated files dropped into `@Resources/Commands/` (written under a temporary name, then renamed). The watcher picks them up through a file system watcher, so a click costs no process start:
+
+```text
+volume <app> <0-100>              one app, matched by process name
+mute <app> <toggle|on|off>
+master <0-100>                    master volume of the default output
+master-mute
+drag <app|@master> <start> <width>  set the start value, then follow the cursor until the left button is released
+output <alias>                    switch the default playback device (planned)
+```
+
+Apps are matched by process name, not process id, because one app such as a browser can own several audio sessions. A change applies to all of them, on every playback device.
+
+**Dragging.** Rainmeter has no drag event and only reports the mouse position inside a mouse action. The skin therefore sends `drag` on the mouse press, with the value under the cursor and the slider width in design pixels. The watcher reads the cursor and the button state itself (per-monitor DPI aware, so the width is converted with the scale of the screen the cursor is on) and applies the value as the cursor moves. While dragging it sends only a small `Preview` bang that redraws the one slider (about 2 ms), and writes the full state once at the end. The slider hit area extends a thumb radius past both ends of the track so the thumb can be grabbed at 0 and 100.
+
+**Moving the panel.** The skin is draggable only by a small grip in the header's top-left corner. Dragging is switched off when the skin loads and on while the cursor is over the grip (`!Draggable`), so a missed slider click never moves the panel.
+
+**Notifications.** After each change the watcher sends a bang to Rainmeter's control window (the message `Rainmeter.exe` itself uses), so the skin redraws immediately instead of waiting for its slow fallback refresh.
 
 **Config.** A user config file maps aliases to devices by a name substring, and lists the pinned and excluded apps and the grace period, so each user defines their own setup. An example config is committed; the personal one is not. The grace period needs the watcher: a one-shot `dump` has no memory and lists only apps playing at that moment, plus pinned ones.
 

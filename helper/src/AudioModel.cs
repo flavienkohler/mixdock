@@ -125,19 +125,7 @@ namespace AppMixer
             var mutedAll = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             seen.Clear();
 
-            IMMDeviceCollection devices;
-            if (enumerator.EnumAudioEndpoints(Const.ERender, Const.DeviceStateActive, out devices) != 0)
-                return new List<AppInfo>();
-            uint deviceCount;
-            devices.GetCount(out deviceCount);
-            for (uint d = 0; d < deviceCount; d++)
-            {
-                IMMDevice device;
-                if (devices.Item(d, out device) != 0) continue;
-                try { ReadDeviceSessions(device, apps, mutedAll); }
-                finally { Marshal.ReleaseComObject(device); }
-            }
-            Marshal.ReleaseComObject(devices);
+            ForEachSession(session => ReadSession(session, apps, mutedAll));
 
             processes.Keys.Where(pid => !seen.Contains(pid)).ToList().ForEach(pid => processes.Remove(pid));
 
@@ -154,43 +142,62 @@ namespace AppMixer
             return list;
         }
 
-        void ReadDeviceSessions(IMMDevice device, Dictionary<string, AppInfo> apps, Dictionary<string, bool> mutedAll)
+        // Calls visit for every audio session of every active playback device.
+        void ForEachSession(Action<IAudioSessionControl2> visit)
         {
-            var iid = Iid.AudioSessionManager2;
-            object o;
-            if (device.Activate(ref iid, Const.ClsctxAll, IntPtr.Zero, out o) != 0) return;
-            var manager = (IAudioSessionManager2)o;
-            IAudioSessionEnumerator sessions;
-            manager.GetSessionEnumerator(out sessions);
-            int count;
-            sessions.GetCount(out count);
-            for (int i = 0; i < count; i++)
+            IMMDeviceCollection devices;
+            if (enumerator.EnumAudioEndpoints(Const.ERender, Const.DeviceStateActive, out devices) != 0) return;
+            uint deviceCount;
+            devices.GetCount(out deviceCount);
+            for (uint d = 0; d < deviceCount; d++)
             {
-                IAudioSessionControl2 session;
-                if (sessions.GetSession(i, out session) != 0) continue;
-                try { ReadSession(session, apps, mutedAll); }
-                finally { Marshal.ReleaseComObject(session); }
+                IMMDevice device;
+                if (devices.Item(d, out device) != 0) continue;
+                try
+                {
+                    var iid = Iid.AudioSessionManager2;
+                    object o;
+                    if (device.Activate(ref iid, Const.ClsctxAll, IntPtr.Zero, out o) != 0) continue;
+                    var manager = (IAudioSessionManager2)o;
+                    IAudioSessionEnumerator sessions;
+                    manager.GetSessionEnumerator(out sessions);
+                    int count;
+                    sessions.GetCount(out count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        IAudioSessionControl2 session;
+                        if (sessions.GetSession(i, out session) != 0) continue;
+                        try { visit(session); }
+                        finally { Marshal.ReleaseComObject(session); }
+                    }
+                    Marshal.ReleaseComObject(sessions);
+                    Marshal.ReleaseComObject(manager);
+                }
+                finally { Marshal.ReleaseComObject(device); }
             }
-            Marshal.ReleaseComObject(sessions);
-            Marshal.ReleaseComObject(manager);
+            Marshal.ReleaseComObject(devices);
+        }
+
+        // The process behind a session, or null for expired sessions, system sounds and unknown processes.
+        ProcessInfo SessionProcess(IAudioSessionControl2 session, out int state, out uint pid)
+        {
+            pid = 0;
+            session.GetState(out state);
+            if (state == Const.SessionStateExpired) return null;
+            if (session.IsSystemSoundsSession() == 0) return null;
+            // A session shared by several processes returns the success code AUDCLNT_S_NO_SINGLE_PROCESS
+            // with the id of the process that created it, so only a negative result is a failure.
+            if (session.GetProcessId(out pid) < 0 || pid == 0) return null;
+            return Lookup(pid);
         }
 
         void ReadSession(IAudioSessionControl2 session, Dictionary<string, AppInfo> apps, Dictionary<string, bool> mutedAll)
         {
-            int state;
-            session.GetState(out state);
-            if (state == Const.SessionStateExpired) return;
-            if (session.IsSystemSoundsSession() == 0) return;
-            // A session shared by several processes returns the success code AUDCLNT_S_NO_SINGLE_PROCESS
-            // with the id of the process that created it, so only a negative result is a failure.
-            uint pid;
-            if (session.GetProcessId(out pid) < 0 || pid == 0) return;
-
-            ProcessInfo info = Lookup(pid);
+            int state; uint pid;
+            ProcessInfo info = SessionProcess(session, out state, out pid);
             if (info == null) return;
             seen.Add(pid);
             string process = info.Name, path = info.Path;
-
             var volume = session as ISimpleAudioVolume;
             if (volume == null) return;
             float level; bool muted;
@@ -213,6 +220,72 @@ namespace AppMixer
                 mutedAll[process] = mutedAll[process] && muted;
             }
         }
+
+        // ---- Writing: a change applies to every session of the app, on every playback device. ----
+
+        void ForAppSessions(string process, Action<ISimpleAudioVolume> apply)
+        {
+            ForEachSession(session =>
+            {
+                int state; uint pid;
+                ProcessInfo info = SessionProcess(session, out state, out pid);
+                if (info == null || !string.Equals(info.Name, process, StringComparison.OrdinalIgnoreCase)) return;
+                var volume = session as ISimpleAudioVolume;
+                if (volume != null) apply(volume);
+            });
+        }
+
+        public void SetAppVolume(string process, float level)
+        {
+            level = Clamp01(level);
+            Guid context = Guid.Empty;
+            ForAppSessions(process, v => v.SetMasterVolume(level, ref context));
+        }
+
+        // mode: "on", "off" or "toggle" (mutes all sessions unless they are all muted already).
+        public void SetAppMute(string process, string mode)
+        {
+            bool mute = mode == "on";
+            if (mode == "toggle")
+            {
+                bool allMuted = true, any = false;
+                ForAppSessions(process, v => { bool m; v.GetMute(out m); allMuted &= m; any = true; });
+                mute = any && !allMuted;
+            }
+            Guid context = Guid.Empty;
+            ForAppSessions(process, v => v.SetMute(mute, ref context));
+        }
+
+        public void SetMasterVolume(float level)
+        {
+            level = Clamp01(level);
+            Guid context = Guid.Empty;
+            WithDefaultEndpoint(e => e.SetMasterVolumeLevelScalar(level, ref context));
+        }
+
+        public void ToggleMasterMute()
+        {
+            Guid context = Guid.Empty;
+            WithDefaultEndpoint(e => { bool m; e.GetMute(out m); e.SetMute(!m, ref context); });
+        }
+
+        void WithDefaultEndpoint(Action<IAudioEndpointVolume> action)
+        {
+            IMMDevice device;
+            if (enumerator.GetDefaultAudioEndpoint(Const.ERender, Const.EMultimedia, out device) != 0) return;
+            try
+            {
+                var iid = Iid.AudioEndpointVolume;
+                object o;
+                if (device.Activate(ref iid, Const.ClsctxAll, IntPtr.Zero, out o) != 0) return;
+                var endpoint = (IAudioEndpointVolume)o;
+                try { action(endpoint); }
+                finally { Marshal.ReleaseComObject(endpoint); }
+            }
+            finally { Marshal.ReleaseComObject(device); }
+        }
+
+        static float Clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
         // A running process that has no audio session (yet). Used to list pinned apps while they are silent.
         public AppInfo FindIdle(string process)

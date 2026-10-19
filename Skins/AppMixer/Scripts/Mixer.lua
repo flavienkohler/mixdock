@@ -12,8 +12,15 @@ local TILE_COLORS = {
 local TRANSPARENT = '0,0,0,0'
 local DIM_TILE = '120,120,130,110'
 
+local SLIDER_W = 208 -- design width of a slider track, see Rows.inc
+local HIT_PAD = 8    -- the hit area extends this far past each end of the track (the thumb's radius plus a little)
+local WHEEL_STEP = 5
+
 local Json
 local statePath
+local rows = {}   -- slot number -> app shown in it
+local master = { volume = 0 }
+local commandSeq = 0
 local lastRaw
 local cache = {} -- last value sent per target, so unchanged values cost no bang
 
@@ -60,7 +67,15 @@ end
 
 -- Icon glyphs are passed as variable names ('#IconMute#'): Rainmeter expands them, whereas a glyph read
 -- through Lua would be mangled by the codepage.
+local function hideRow(i)
+  rows[i] = nil
+  for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile', 'R' .. i .. 'Hit' }) do
+    setVisible(group, false)
+  end
+end
+
 local function renderRow(i, app)
+  rows[i] = app
   local prefix = 'R' .. i
   local idle = app.idle == true -- pinned and running, but no audio session yet: dimmed, nothing to control
   local muted = app.muted == true
@@ -86,6 +101,7 @@ local function renderRow(i, app)
   setVisible(prefix, true)
   setVisible(prefix .. 'Img', hasIcon)
   setVisible(prefix .. 'Tile', not hasIcon)
+  setVisible(prefix .. 'Hit', not idle)
 end
 
 local function renderFooter(devices)
@@ -121,14 +137,15 @@ local function render(state)
   setOption('MasterName', 'Text', output.name or 'No output device')
   setOption('MasterPercent', 'Text', clampPercent(output.volume) .. '%')
   setOption('MasterIcon', 'Text', masterMuted and '#IconMute#' or '#IconVolume#')
-  setVariable('MasterVol', clampPercent(output.volume))
+  master.volume = clampPercent(output.volume)
+  setVariable('MasterVol', master.volume)
   setVariable('MasterFill', masterMuted and theme('MutedColor') or theme('Accent'))
 
   for i = 1, MAX_ROWS do
     if i <= shown then
       renderRow(i, apps[i])
     else
-      for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile' }) do setVisible(group, false) end
+      hideRow(i)
     end
   end
 
@@ -146,32 +163,119 @@ local function render(state)
   SKIN:Bang('!Redraw')
 end
 
-function Initialize()
-  Json = dofile(SKIN:ReplaceVariables('#CURRENTPATH#Scripts\\Json.lua'))
-  statePath = SKIN:ReplaceVariables('#@#State\\state.json')
-end
-
-function Update()
+-- Reads the state file and redraws if it changed.
+local function readState()
   local file = io.open(statePath, 'rb')
   if not file then
     if lastRaw ~= false then
       lastRaw = false
-      for i = 1, MAX_ROWS do
-        for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile' }) do setVisible(group, false) end
-      end
+      for i = 1, MAX_ROWS do hideRow(i) end
       renderMessage('Waiting for the helper (build it with helper\\build.ps1)')
       SKIN:Bang('!UpdateMeter', '*')
       SKIN:Bang('!Redraw')
     end
-    return 0
+    return
   end
   local raw = file:read('*a')
   file:close()
-  if raw == lastRaw then return 0 end
+  if raw == lastRaw then return end
 
   local ok, state = pcall(Json.decode, raw)
-  if not ok or type(state) ~= 'table' then return 0 end -- half-written or invalid: keep the last picture
+  if not ok or type(state) ~= 'table' then return end -- half-written or invalid: keep the last picture
   lastRaw = raw
   render(state)
-  return 1
+end
+
+-- ---- Commands to the helper: small files that the helper picks up as soon as they appear ----
+
+local function send(...)
+  commandSeq = commandSeq + 1
+  local base = string.format('%s%d-%06d-%04d', SKIN:ReplaceVariables('#@#Commands\\'), os.time(), commandSeq, math.random(0, 9999))
+  local file = io.open(base .. '.tmp', 'wb')
+  if not file then return end -- the helper creates the folder when it starts
+  file:write(table.concat({ ... }, '\t'))
+  file:close()
+  os.rename(base .. '.tmp', base .. '.cmd') -- renamed only when complete
+end
+
+local function target(i)
+  if i == 0 then return '@master' end
+  local app = rows[i]
+  if app and not app.idle then return app.process end
+end
+
+-- Mouse press on a slider (0 = master). The hit area is wider than the track so the thumb can be grabbed at
+-- both ends, so the press position is converted to a track percentage. The helper then follows the cursor
+-- until the button is released.
+function Press(i, percentOfHitArea)
+  local who = target(i)
+  if not who then return end
+  local scale = tonumber(SKIN:GetVariable('Scale')) or 1
+  local hitW = SLIDER_W + 2 * HIT_PAD
+  local value = ((tonumber(percentOfHitArea) or 0) / 100 * hitW - HIT_PAD) / SLIDER_W * 100
+  send('drag', who, tostring(math.floor(clampPercent(value) + 0.5)), tostring(SLIDER_W * scale))
+end
+
+-- During a drag the helper sends the new value here: only that slider and its percentage are redrawn.
+function Preview(who, value)
+  value = clampPercent(value)
+  if who == '@master' then
+    master.volume = value
+    setVariable('MasterVol', value)
+    SKIN:Bang('!SetOption', 'MasterPercent', 'Text', value .. '%')
+    SKIN:Bang('!UpdateMeter', 'MasterSlider')
+    SKIN:Bang('!UpdateMeter', 'MasterPercent')
+  else
+    for i = 1, MAX_ROWS do
+      local app = rows[i]
+      if app and app.process == who then
+        app.volume = value
+        setVariable('R' .. i .. 'Vol', value)
+        SKIN:Bang('!SetOption', 'R' .. i .. 'Percent', 'Text', value .. '%')
+        SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Slider')
+        SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Percent')
+        break
+      end
+    end
+  end
+  SKIN:Bang('!Redraw')
+end
+
+-- Mouse wheel over a row (0 = master): direction 1 up, -1 down.
+function Wheel(i, direction)
+  local who = target(i)
+  if not who then return end
+  local current = (i == 0) and master.volume or clampPercent(rows[i].volume)
+  local value = clampPercent(current + direction * WHEEL_STEP)
+  if i == 0 then
+    master.volume = value
+    send('master', tostring(value))
+  else
+    rows[i].volume = value -- remembered right away, so quick successive notches add up
+    send('volume', who, tostring(value))
+  end
+end
+
+-- Mute button of a row (0 = master).
+function Mute(i)
+  local who = target(i)
+  if not who then return end
+  if i == 0 then send('master-mute') else send('mute', who, 'toggle') end
+end
+
+function Initialize()
+  Json = dofile(SKIN:ReplaceVariables('#CURRENTPATH#Scripts\\Json.lua'))
+  statePath = SKIN:ReplaceVariables('#@#State\\state.json')
+  math.randomseed(os.time())
+end
+
+-- Called by the helper right after it wrote the state.
+function Refresh()
+  readState()
+end
+
+-- Slow fallback in case a notification was missed.
+function Update()
+  readState()
+  return 0
 end

@@ -125,7 +125,8 @@ namespace AppMixer
     public class Options
     {
         public bool Stdout, All; // All: list every session, ignoring pinned/grace/exclude (for debugging)
-        public string StatePath, IconsDir, ConfigPath;
+        public string StatePath, IconsDir, ConfigPath, CommandsDir;
+        public string Skin = "AppMixer"; // name of the Rainmeter skin to notify
 
         public static Options Parse(string[] args)
         {
@@ -133,12 +134,14 @@ namespace AppMixer
             var o = new Options {
                 StatePath = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\State\state.json")),
                 IconsDir = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\Icons")),
+                CommandsDir = Path.GetFullPath(Path.Combine(exeDir, @"..\@Resources\Commands")),
                 ConfigPath = Path.Combine(exeDir, "config.json")
             };
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "--stdout") o.Stdout = true;
                 else if (args[i] == "--all") o.All = true;
+                else if (args[i] == "--skin" && i + 1 < args.Length) o.Skin = args[++i];
                 else if (args[i] == "--state" && i + 1 < args.Length) o.StatePath = Path.GetFullPath(args[++i]);
                 else if (args[i] == "--icons" && i + 1 < args.Length) o.IconsDir = Path.GetFullPath(args[++i]);
                 else if (args[i] == "--config" && i + 1 < args.Length) o.ConfigPath = Path.GetFullPath(args[++i]);
