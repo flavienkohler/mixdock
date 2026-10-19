@@ -113,22 +113,26 @@ Apps are matched by process name, not process id, because one app such as a brow
 
 ## Build plan
 
-Six milestones, each testable on its own.
+Milestones, each testable on its own.
 
-1. **Investigate.** Choose the helper. Result: an original helper on Core Audio, with no third-party audio tool or plugin (the NirSoft command line tool and the AppVolume plugin were evaluated and worked, but their licenses do not suit an open repository).
+1. **Investigate.** Choose the helper. Result: an original helper on Core Audio, with no third-party audio tool or plugin (the NirSoft command line tool and the AppVolume plugin were evaluated and worked, but their licenses do not suit an open repository). Done.
 2. **Static panel.** Theme and three fake rows with output buttons. Done.
-3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output. Done, including the watch mode (the list shows the first 6 apps, scrolling comes with the polish milestone).
-4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes.
-5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `AppMixerHelper set-output <alias>`.
-6. **Polish.** Hotkey toggle, close on Esc or outside click, empty state, pinned apps, performance check, optional watch mode.
+3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output. Done, including the watch mode (the list shows the first 6 apps).
+4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes. Done.
+5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `AppMixerHelper set-output <alias>`. Done.
+6. **Pinning, reordering and dimming.** Pin button, reorder grips, dimmed apps that are not playing. Done.
+7. **Settings and themes.** An accent color (the Windows accent color by default, presets, or any custom color), plus panel opacity and corner radius, changed from the skin's context menu and saved in a settings file.
+8. **Compact mode.** A minimal layout: icons without names, no percentages, smaller output buttons, less space.
+9. **Publish.** README with screenshots and setup steps, a last cleanup, and a first tagged release.
 
+Not planned for now: a global hotkey, closing on Esc or a click outside, scrolling past 6 apps, and automatic placement. The panel is meant to stay open on a screen; drag it by its grip.
 **Acceptance tests**
 
-- [ ] Lowering one app does not change another app's volume
-- [ ] An app with several audio sessions (a browser with several tabs) changes as one app
-- [ ] Each output button switches the default device and highlights correctly
-- [ ] An app opened after the panel appears shows up without a restart
-- [ ] Dragging a slider is smooth, with no flicker of other rows
-- [ ] Sharp and correctly sized on screens with different scaling
-- [ ] Panel hidden: no measurable CPU use from the skin or helper
+- [x] Lowering one app does not change another app's volume
+- [x] An app with several audio sessions (a browser with several tabs) changes as one app
+- [x] Each output button switches the default device and highlights correctly
+- [x] An app opened after the panel appears shows up without a restart
+- [x] Dragging a slider is smooth, with no flicker of other rows
+- [x] Sharp and correctly sized on screens with different scaling
+- [x] Panel hidden: no measurable CPU use from the skin or helper
 - [ ] Rainmeter stays under about 1% CPU with the panel open during a game

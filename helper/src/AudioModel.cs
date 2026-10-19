@@ -37,6 +37,13 @@ namespace AppMixer
         readonly Dictionary<uint, ProcessInfo> processes = new Dictionary<uint, ProcessInfo>();
         readonly HashSet<uint> seen = new HashSet<uint>();
 
+        // Device names rarely change, so they are read once per device.
+        readonly Dictionary<string, string> deviceNames = new Dictionary<string, string>();
+
+        // Result of the last look for a running process without a session, per process name.
+        class IdleLookup { public DateTime At; public AppInfo App; }
+        readonly Dictionary<string, IdleLookup> idleLookups = new Dictionary<string, IdleLookup>(StringComparer.OrdinalIgnoreCase);
+
         // When each app was last seen playing. Only a long-running watcher remembers this across refreshes.
         readonly Dictionary<string, DateTime> lastActive = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
@@ -72,7 +79,9 @@ namespace AppMixer
                 if (collection.Item(i, out device) != 0) continue;
                 string id;
                 device.GetId(out id);
-                result.Add(new DeviceInfo { Id = id, Name = FriendlyName(device), IsDefault = id == defaultId });
+                string name;
+                if (!deviceNames.TryGetValue(id, out name)) deviceNames[id] = name = FriendlyName(device);
+                result.Add(new DeviceInfo { Id = id, Name = name, IsDefault = id == defaultId });
                 Marshal.ReleaseComObject(device);
             }
             Marshal.ReleaseComObject(collection);
@@ -299,18 +308,26 @@ namespace AppMixer
         static float Clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
         // A running process that has no audio session (yet). Used to list pinned apps while they are silent.
+        // Scanning the process list is comparatively costly, so the answer is reused for a few seconds.
         public AppInfo FindIdle(string process)
         {
+            IdleLookup lookup;
+            if (idleLookups.TryGetValue(process, out lookup) && (DateTime.UtcNow - lookup.At).TotalSeconds < 4) return lookup.App;
+
+            AppInfo app = null;
             Process[] found = Process.GetProcessesByName(process);
             try
             {
-                if (found.Length == 0) return null;
-                string path = ProcessPath((uint)found[0].Id);
-                return new AppInfo { Process = found[0].ProcessName, Path = path, Display = DisplayName(found[0].ProcessName, path) };
+                if (found.Length > 0)
+                {
+                    string path = ProcessPath((uint)found[0].Id);
+                    app = new AppInfo { Process = found[0].ProcessName, Path = path, Display = DisplayName(found[0].ProcessName, path) };
+                }
             }
             finally { foreach (var p in found) p.Dispose(); }
+            idleLookups[process] = new IdleLookup { At = DateTime.UtcNow, App = app };
+            return app;
         }
-
         ProcessInfo Lookup(uint pid)
         {
             ProcessInfo info;

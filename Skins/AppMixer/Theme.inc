@@ -43,4 +43,3 @@ IconClose=
 IconVolume=
 IconMute=
 IconPin=
-IconUnpin=
