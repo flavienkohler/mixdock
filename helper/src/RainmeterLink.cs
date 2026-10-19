@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace AppMixer
+namespace Mixdock
 {
     static class RainmeterLink
     {

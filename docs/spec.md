@@ -1,4 +1,4 @@
-# AppMixer design
+# Mixdock design
 
 A compact Rainmeter skin that changes the volume of individual apps and switches the default audio output on Windows 11, without opening Windows settings.
 
@@ -36,9 +36,9 @@ A single narrow panel (320 px design width), top to bottom:
 - An app is listed while it plays and for a grace period after it stops (60 s by default), or always while it runs if it is pinned in the config. A pinned app that has no audio session yet (Windows only creates one once the app makes sound) is shown as a dimmed row with a faded, non-interactive slider (the last volume seen for the app since the skin loaded, or just the empty track when none is known). Apps that are not playing right now are dimmed (name, icon and a faded slider), including apps that keep a silent session open after a call or a pause, and those stay adjustable. Sessions of every active output device are merged by process name, so an app playing on a non-default device is listed too. An `exclude` list hides apps for good.
 - Gutter: each row has a narrow gutter left of the app icon. At the top, a small pin button works as an on/off switch: grey and translucent when the app is not pinned, bright (accent color) when it is, a little brighter on hover. A click pins or unpins the app and edits only the `pinned` list of the config file (the rest of the file keeps its formatting). Below the pin, a small grip square, shown when the app's group has two or more apps, is a faint drag handle that gets more visible on hover.
 - Order: pinned apps first, in the order of the `pinned` list, then the other apps. Inside each group, apps follow the order the user chose, and apps without a chosen position come after them alphabetically (so a new app lands at the end of its group). Dragging the grip moves the app up or down inside its group, one place per row height, with the rows following live. The pinned order is saved to the `pinned` list of the config file, the order of the other apps to a small state file (those apps come and go, so it does not belong in the config). Rows do not jump while a slider is dragged.
-- At most 6 rows are visible, then the list scrolls. Empty state: "No app is playing audio".
+- At most 6 rows are shown (scrolling is not implemented). Empty state: "No app is playing audio".
 - Output buttons switch the Windows default playback device and the list refreshes.
-- Toggle with a global hotkey and an optional button. The panel closes on Esc or click outside, with a pinned mode.
+- The panel stays open until it is closed with the cross in its corner. A global hotkey and closing on Esc or a click outside are not implemented: the panel is meant to stay on a screen.
 
 **Size.** All sizes derive from one `Scale` variable in `Theme.inc`. Rainmeter already scales skins per monitor DPI; `Scale` only corrects what still looks off.
 
@@ -101,7 +101,7 @@ Apps are matched by process name, not process id, because one app such as a brow
 
 - One Lua script parses the state file and updates a fixed pool of row slots, hiding unused ones (Rainmeter meters cannot be created at runtime).
 - Sliders send throttled commands during a drag, not one per pixel.
-- Rainmeter has no global hotkey: PowerToys Keyboard Manager or AutoHotkey runs `Rainmeter.exe !ToggleConfig "AppMixer" "AppMixer.ini"`.
+- Rainmeter has no global hotkey: PowerToys Keyboard Manager or AutoHotkey runs `Rainmeter.exe !ToggleConfig "Mixdock" "Mixdock.ini"`.
 - The state refreshes only while the panel is visible.
 
 ## Styling and performance
@@ -119,11 +119,11 @@ Milestones, each testable on its own.
 2. **Static panel.** Theme and three fake rows with output buttons. Done.
 3. **Read path.** The helper writes the state file; the skin shows real apps, icons, volumes and the active output. Done, including the watch mode (the list shows the first 6 apps).
 4. **Write path.** Sliders, mute, mouse wheel and master volume change the real volumes. Done.
-5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `AppMixerHelper set-output <alias>`. Done.
+5. **Output switching.** The three buttons change the default device through the configured aliases. Also available from a terminal: `MixdockHelper set-output <alias>`. Done.
 6. **Pinning, reordering and dimming.** Pin button, reorder grips, dimmed apps that are not playing. Done.
 7. **Settings and themes.** An accent color (the Windows accent color by default, presets, or any custom color) and the panel opacity, changed from the skin's right-click menu and saved in `Settings.inc`. The Windows accent is read from the registry (`HKCU\Software\Microsoft\Windows\DWM\AccentColor`, a DWORD with alpha, blue, green and red bytes) through a Rainmeter Registry measure, and followed live. The text color on the accent (dark or white) is chosen from its luminance. Defaults live in `Theme.inc`; `Settings.inc` overrides them and is written by the skin itself, because `!WriteKeyValue` cannot create a missing file.
 8. **Compact mode.** A minimal layout chosen from the right-click menu: icons and sliders only, no names (the name is a tooltip on the icon) and no percentages (the percentage replaces the mute button while a slider is dragged), the pin and grip shown only while the cursor is over the panel, a slim master row, and small icon buttons for the outputs (the optional icon of each output in config.json, or its number). Every position and size is a variable in Layout-full.inc or Layout-compact.inc; the skin includes the one named by the Layout setting, and Rows.inc is generated from the same variables. Done.
-9. **Publish.** README with screenshots and setup steps, a last cleanup, and a first tagged release.
+9. **Publish.** README with screenshots and setup steps, a changelog, a packaging script (`tools\package.ps1`: a clean zip plus a staged folder for Rainmeter's own `.rmskin` packager, documented in `docs/packaging.md`), a clean install test, and a first tagged release (0.1.0).
 
 Not planned for now: a global hotkey, closing on Esc or a click outside, scrolling past 6 apps, and automatic placement. The panel is meant to stay open on a screen; drag it by its grip.
 **Acceptance tests**

@@ -1,4 +1,4 @@
-# Generates Skins\AppMixer\Rows.inc: the pool of app row slots. Rainmeter cannot create meters at runtime,
+# Generates Skins\Mixdock\Rows.inc: the pool of app row slots. Rainmeter cannot create meters at runtime,
 # so the skin has a fixed number of identical rows that Mixer.lua fills, shows and hides.
 # Run it after changing the row structure below, then commit the generated file. Positions and sizes are not
 # in here: they are variables from Layout-full.inc and Layout-compact.inc.
@@ -121,6 +121,6 @@ Group=R${n}
     [void]$out.Append($row)
 }
 
-$target = Join-Path (Split-Path -Parent $PSScriptRoot) 'Skins\AppMixer\Rows.inc'
+$target = Join-Path (Split-Path -Parent $PSScriptRoot) 'Skins\Mixdock\Rows.inc'
 [IO.File]::WriteAllText($target, $out.ToString().TrimEnd() + "`r`n", (New-Object Text.UTF8Encoding $false))
 Write-Host "Wrote $target"

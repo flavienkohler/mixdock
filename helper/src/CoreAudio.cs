@@ -1,10 +1,10 @@
-// Minimal COM declarations for the parts of the Windows Core Audio API that AppMixer uses.
+// Minimal COM declarations for the parts of the Windows Core Audio API that Mixdock uses.
 // Method order inside each interface must match the native vtable, do not reorder.
 
 using System;
 using System.Runtime.InteropServices;
 
-namespace AppMixer
+namespace Mixdock
 {
     static class Iid
     {

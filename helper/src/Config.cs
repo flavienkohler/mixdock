@@ -16,7 +16,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
-namespace AppMixer
+namespace Mixdock
 {
     class DeviceEntry
     {
@@ -107,6 +107,13 @@ namespace AppMixer
         }
 
         static string Quote(string s) { return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; }
+
+        // First run: if there is no config file yet, start from config.example.json next to it (when present).
+        public static void EnsureExists(string path)
+        {
+            string example = Path.Combine(Path.GetDirectoryName(path), "config.example.json");
+            if (!File.Exists(path) && File.Exists(example)) File.Copy(example, path);
+        }
 
         public static Config Load(string path, string otherOrderPath = null)
         {

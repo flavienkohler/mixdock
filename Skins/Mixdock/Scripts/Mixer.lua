@@ -132,7 +132,7 @@ end
 local function saveSettings()
   local file = io.open(SKIN:ReplaceVariables('#CURRENTPATH#Settings.inc'), 'wb')
   if not file then return end
-  file:write('; AppMixer settings. The skin\'s right-click menu writes this file; you can also edit it by hand.\r\n')
+  file:write('; Mixdock settings. The skin\'s right-click menu writes this file; you can also edit it by hand.\r\n')
   file:write('; Layout: full or compact.\r\n')
   file:write('; AccentMode: auto (Windows accent color) or custom. AccentCustom: RRGGBB (for example 3B82F6) or r,g,b.\r\n')
   file:write('; BgAlpha: opacity of the panel, 110 (see-through) to 255 (solid).\r\n\r\n[Variables]\r\n')

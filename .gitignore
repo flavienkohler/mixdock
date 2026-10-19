@@ -2,14 +2,16 @@ CLAUDE.md
 # build output and runtime state
 helper/bin/
 helper/obj/
-Skins/AppMixer/Helper/*.exe
-Skins/AppMixer/@Resources/State/
-Skins/AppMixer/@Resources/Icons/
+Skins/Mixdock/Helper/*.exe
+Skins/Mixdock/@Resources/State/
+Skins/Mixdock/@Resources/Icons/
 # personal device aliases (an example config is committed instead)
-Skins/AppMixer/Helper/config.json
+Skins/Mixdock/Helper/config.json
 # Rainmeter-generated folders
 Skins/@Vault/
 Skins/@Backup/
-Skins/AppMixer/@Resources/Commands/
+Skins/Mixdock/@Resources/Commands/
 # user settings written by the skin's right-click menu
-Skins/AppMixer/Settings.inc
+Skins/Mixdock/Settings.inc
+Skins/Mixdock/Helper/config.example.json
+dist/

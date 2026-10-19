@@ -17,7 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-namespace AppMixer
+namespace Mixdock
 {
     class Commands : IDisposable
     {

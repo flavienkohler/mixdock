@@ -1,6 +1,6 @@
-// AppMixer helper: reads Windows audio state and writes it to a JSON file for the Rainmeter skin.
+// Mixdock helper: reads Windows audio state and writes it to a JSON file for the Rainmeter skin.
 //
-// Usage: AppMixerHelper dump [--stdout] [--state <file>] [--icons <dir>] [--config <file>]
+// Usage: MixdockHelper dump [--stdout] [--state <file>] [--icons <dir>] [--config <file>]
 
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Web.Script.Serialization;
 
-namespace AppMixer
+namespace Mixdock
 {
     static class Program
     {
@@ -18,13 +18,14 @@ namespace AppMixer
             string command = args.Length > 0 ? args[0] : "";
             if (command != "dump" && command != "watch" && command != "stop" && command != "set-output")
             {
-                Console.Error.WriteLine("usage: AppMixerHelper dump|watch|stop|set-output <alias> [--stdout] [--state <file>] [--icons <dir>] [--config <file>]");
+                Console.Error.WriteLine("usage: MixdockHelper dump|watch|stop|set-output <alias> [--stdout] [--state <file>] [--icons <dir>] [--config <file>]");
                 return 2;
             }
             try
             {
                 var options = Options.Parse(args);
                 if (command == "stop") return Watcher.Stop() ? 0 : 1;
+                Config.EnsureExists(options.ConfigPath);
                 var config = Config.Load(options.ConfigPath, options.OrderPath);
                 if (command == "watch") return Watcher.Run(config, options);
                 if (command == "set-output")
@@ -145,7 +146,7 @@ namespace AppMixer
     {
         public bool Stdout, All; // All: list every session, ignoring pinned/grace/exclude (for debugging)
         public string StatePath, IconsDir, ConfigPath, CommandsDir, OrderPath;
-        public string Skin = "AppMixer"; // name of the Rainmeter skin to notify
+        public string Skin = "Mixdock"; // name of the Rainmeter skin to notify
 
         public static Options Parse(string[] args)
         {

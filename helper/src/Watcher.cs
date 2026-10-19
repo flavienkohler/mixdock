@@ -5,12 +5,12 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-namespace AppMixer
+namespace Mixdock
 {
     static class Watcher
     {
-        const string MutexName = @"Local\AppMixerHelperWatch";
-        const string StopEventName = @"Local\AppMixerHelperStop";
+        const string MutexName = @"Local\MixdockHelperWatch";
+        const string StopEventName = @"Local\MixdockHelperStop";
         const int IntervalMs = 1000;
 
         public static int Run(Config config, Options options)
