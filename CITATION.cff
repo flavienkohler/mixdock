@@ -1,8 +1,10 @@
-﻿cff-version: 1.2.0
+cff-version: 1.2.0
 message: "If you use Mixdock, please cite it as below."
 title: "Mixdock: a per-app volume mixer skin for Rainmeter"
 abstract: "A compact Rainmeter skin to set the volume of individual apps and to switch the default audio output on Windows 11, with an original helper on the Windows Core Audio API."
 type: software
+repository-code: "https://github.com/flavienkohler/mixdock"
+url: "https://github.com/flavienkohler/mixdock"
 authors:
   - family-names: "Kohler"
     given-names: "Flavien"
