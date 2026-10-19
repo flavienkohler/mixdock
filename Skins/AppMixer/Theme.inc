@@ -1,17 +1,12 @@
-; Theme.inc - all colors, sizes and fonts of the AppMixer panel.
-; Sizes are design pixels; the skin multiplies them by Scale.
+; Theme.inc - colors, fonts and icons shared by both layouts. Positions and sizes are in Layout-full.inc and
+; Layout-compact.inc (design pixels; the skin multiplies them by Scale).
 
 [Variables]
 ; Global scale. Raise it on a screen that looks too small (125% screen: try 1.25).
 Scale=1
-
-; Panel
-PanelW=340
-; Width of the gutter left of the app icons (pin button and reorder grip)
-Gutter=20
-PanelH=336
+; Which layout file is used: full or compact (the right-click menu changes it in Settings.inc).
+Layout=full
 Radius=12
-Pad=16
 
 ; Colors (R,G,B,A)
 BgRGB=24,24,28
@@ -37,13 +32,15 @@ GrabHoverColor=255,255,255,150
 ; Fonts
 Font=Segoe UI Variable Text
 IconFont=Segoe Fluent Icons
-FontSize=9
-SmallFontSize=8
-TitleFontSize=11
-IconSize=11
 
 ; Icon glyphs (Segoe Fluent Icons, Windows 11). Literal characters: this file must stay UTF-16 LE (Rainmeter reads it as such).
+; The output icons can be chosen per output with "icon" in the helper's config.json (headset, speakers, monitor, jack, gamepad).
 IconClose=
 IconVolume=
 IconMute=
 IconPin=
+IconHeadset=
+IconSpeakers=
+IconMonitor=
+IconJack=
+IconGamepad=

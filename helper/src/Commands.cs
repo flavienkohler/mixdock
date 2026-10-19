@@ -115,6 +115,7 @@ namespace AppMixer
                 }
                 Thread.Sleep(10);
             }
+            preview(target, -1); // tells the skin the drag is over
             publish(); // one full refresh when the button is released
         }
 

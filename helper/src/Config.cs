@@ -1,7 +1,8 @@
 // User configuration: which output devices get a button, and which apps to hide.
 //
 // {
-//   "devices": [ { "alias": "headset", "label": "Headset", "match": "part of the device name" } ],
+//   "devices": [ { "alias": "headset", "label": "Headset", "match": "part of the device name", "icon": "headset" } ],
+//                  icon is optional (headset, speakers, monitor, jack, gamepad): the compact layout shows it, or the output's number
 //   "pinned": [ "process name without .exe" ],   always listed while the app runs, shown first
 //   "exclude": [ "process name without .exe" ],  never listed
 //   "graceSeconds": 60                           how long an app stays listed after it stops playing
@@ -19,7 +20,7 @@ namespace AppMixer
 {
     class DeviceEntry
     {
-        public string Alias, Label, Match;
+        public string Alias, Label, Match, Icon; // Icon: optional, shown instead of the label in the compact layout
     }
 
     class Config
@@ -127,7 +128,8 @@ namespace AppMixer
                     config.Devices.Add(new DeviceEntry {
                         Alias = alias,
                         Match = Convert.ToString(d["match"]),
-                        Label = d.ContainsKey("label") ? Convert.ToString(d["label"]) : alias
+                        Label = d.ContainsKey("label") ? Convert.ToString(d["label"]) : alias,
+                        Icon = d.ContainsKey("icon") ? Convert.ToString(d["icon"]) : null
                     });
                 }
             }

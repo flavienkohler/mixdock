@@ -3,7 +3,12 @@
 -- that this script fills and shows or hides.
 
 local MAX_ROWS = 6
+-- Sizes of the current layout (Layout-full.inc or Layout-compact.inc), read in Initialize().
 local ROWS_TOP, ROW_H = 112, 52
+local DIVIDER_GAP, FOOTER_GAP, FOOTER_H, BOTTOM_PAD = 4, 14, 36, 14
+local compact = false
+local panelHover = false -- true while the cursor is over the panel
+local previewing = false -- true while a slider is dragged
 local TILE_COLORS = {
   '124,92,230,255', '20,150,120,255', '220,110,40,255',
   '205,60,130,255', '40,130,210,255', '150,130,30,255',
@@ -12,7 +17,7 @@ local TILE_COLORS = {
 local TRANSPARENT = '0,0,0,0'
 local DIM_TILE = '120,120,130,110'
 
-local SLIDER_W = 208 -- design width of a slider track, see Rows.inc
+local SLIDER_W = 208 -- design width of a slider track
 local HIT_PAD = 8    -- the hit area extends this far past each end of the track (the thumb's radius plus a little)
 local WHEEL_STEP = 5
 
@@ -29,7 +34,7 @@ local master = { volume = 0 }
 local commandSeq = 0
 local lastRaw
 local accent, accentText, accentHover -- the highlight color, the text color on it, and a lighter shade for hover
-local settings = {} -- user choices kept in Settings.inc: AccentMode, AccentCustom, BgAlpha
+local settings = {} -- user choices kept in Settings.inc: Layout, AccentMode, AccentCustom, BgAlpha
 local cache = {} -- last value sent per target, so unchanged values cost no bang
 
 local function setOption(meter, option, value)
@@ -81,7 +86,7 @@ end
 -- ---- Settings and accent color ----
 
 local PRESETS = { blue = '60A5FA', violet = 'A78BFA', green = '4ADE80', orange = 'FB923C', pink = 'F472B6', red = 'F87171' }
-local SETTING_KEYS = { 'AccentMode', 'AccentCustom', 'BgAlpha' }
+local SETTING_KEYS = { 'Layout', 'AccentMode', 'AccentCustom', 'BgAlpha' }
 local OPACITIES = { 100, 90, 80, 70, 60, 50 } -- percent, the choices of the menu
 
 -- Panel opacity in percent -> the alpha value (0-255) used in the background color.
@@ -128,17 +133,18 @@ local function saveSettings()
   local file = io.open(SKIN:ReplaceVariables('#CURRENTPATH#Settings.inc'), 'wb')
   if not file then return end
   file:write('; AppMixer settings. The skin\'s right-click menu writes this file; you can also edit it by hand.\r\n')
+  file:write('; Layout: full or compact.\r\n')
   file:write('; AccentMode: auto (Windows accent color) or custom. AccentCustom: RRGGBB (for example 3B82F6) or r,g,b.\r\n')
   file:write('; BgAlpha: opacity of the panel, 110 (see-through) to 255 (solid).\r\n\r\n[Variables]\r\n')
   for _, key in ipairs(SETTING_KEYS) do file:write(key .. '=' .. tostring(settings[key]) .. '\r\n') end
   file:close()
 end
 
--- Puts a check mark (">") in front of the current accent and opacity choices in the right-click menu.
+-- Puts a check mark (">") in front of the current layout, accent and opacity choices in the right-click menu.
 local function updateMenuMarks()
   local custom = settings.AccentMode == 'custom'
   local chosen = custom and tostring(settings.AccentCustom):upper():gsub('^#', '') or nil
-  local marks = { Auto = not custom, Custom = custom }
+  local marks = { Auto = not custom, Custom = custom, Full = settings.Layout ~= 'compact', Compact = settings.Layout == 'compact' }
   for name, hex in pairs(PRESETS) do
     local isPreset = custom and chosen == hex
     marks[name:sub(1, 1):upper() .. name:sub(2)] = isPreset
@@ -149,10 +155,16 @@ local function updateMenuMarks()
 end
 
 local function loadSettings()
+  settings.Layout = theme('Layout') == 'compact' and 'compact' or 'full'
   settings.AccentMode = theme('AccentMode') == 'custom' and 'custom' or 'auto'
   settings.AccentCustom = theme('AccentCustom')
   settings.BgAlpha = tonumber(theme('BgAlpha')) or 238
 end
+-- In the compact layout the pin and the grip are shown only while the cursor is over the panel.
+local function gutterVisible()
+  return not compact or panelHover
+end
+
 local function hideRow(i)
   rows[i] = nil
   for _, group in ipairs({ 'R' .. i, 'R' .. i .. 'Img', 'R' .. i .. 'Tile', 'R' .. i .. 'Hit',
@@ -185,7 +197,9 @@ local function renderRow(i, app)
   local silent = app.active ~= true -- has a session but nothing is playing (e.g. Discord after a call): dimmed, still adjustable
   local name = app.name or app.process or '?'
 
-  setOption(prefix .. 'Name', 'Text', name)
+  -- Compact: no names and no percentages (the name is a tooltip on the icon, the percentage shows while dragging).
+  setOption(prefix .. 'Name', 'Text', compact and '' or name)
+  for _, part in ipairs({ 'Img', 'Tile' }) do setOption(prefix .. part, 'ToolTipText', compact and name or '') end
   setOption(prefix .. 'Name', 'FontColor',
     (muted or idle) and theme('MutedColor') or (silent and theme('TextDimColor') or theme('TextColor')))
   -- An app without a session has no volume to read, so its slider shows the last volume seen for it, if any.
@@ -198,7 +212,7 @@ local function renderRow(i, app)
   end
   local dimmed = idle or silent -- not playing: the slider keeps its place but is drawn faded
 
-  setOption(prefix .. 'Percent', 'Text', volume and (volume .. '%') or '')
+  setOption(prefix .. 'Percent', 'Text', (not compact and volume) and (volume .. '%') or '')
   setOption(prefix .. 'Percent', 'FontColor', muted and theme('MutedColor') or theme('TextDimColor'))
   setOption(prefix .. 'Mute', 'Text', idle and '' or (muted and '#IconMute#' or '#IconVolume#'))
   setOption(prefix .. 'Mute', 'FontColor', muted and theme('MutedColor') or theme('TextColor'))
@@ -232,9 +246,16 @@ local function renderRow(i, app)
   -- has at least two apps to reorder.
   local pinned = app.pinned == true
   paintPin(i)
-  setVisible(prefix .. 'Pin', true)
-  setVisible(prefix .. 'Grab', (pinned and pinnedShown or otherShown) >= 2)
+  setVisible(prefix .. 'Pin', gutterVisible())
+  setVisible(prefix .. 'Grab', gutterVisible() and (pinned and pinnedShown or otherShown) >= 2)
 end
+
+-- Output icons for the compact layout: values of the "icon" field in config.json -> icon variables of Theme.inc.
+local OUTPUT_ICONS = {
+  headset = '#IconHeadset#', headphones = '#IconHeadset#', speakers = '#IconSpeakers#', speaker = '#IconSpeakers#',
+  monitor = '#IconMonitor#', screen = '#IconMonitor#', tv = '#IconMonitor#', jack = '#IconJack#', aux = '#IconJack#',
+  gamepad = '#IconGamepad#', controller = '#IconGamepad#',
+}
 
 local function renderFooter(devices)
   for k = 1, 3 do
@@ -248,8 +269,20 @@ local function renderFooter(devices)
         text = theme('MutedColor')
       end
       setVariable(meter .. 'Fill', fill)
-      setOption(meter .. 'Label', 'Text', device.name or device.alias or '')
+      local label, face, size = device.name or device.alias or '', '#Font#', '(#SmallFontSize#*#Scale#)'
+      if compact then
+        -- icon of the output (chosen with "icon" in config.json), or its number when it has none
+        local glyph = OUTPUT_ICONS[tostring(device.icon or ''):lower()]
+        if glyph then label, face, size = glyph, '#IconFont#', '(#IconSize#*#Scale#)'
+        else label, face, size = tostring(k), '#Font#', '(#FontSize#*#Scale#)' end
+      end
+      setOption(meter .. 'Label', 'Text', label)
+      setOption(meter .. 'Label', 'FontFace', face)
+      setOption(meter .. 'Label', 'FontSize', size)
       setOption(meter .. 'Label', 'FontColor', text)
+      local tip = compact and (device.name or device.alias or '') or ''
+      setOption(meter, 'ToolTipText', tip)
+      setOption(meter .. 'Label', 'ToolTipText', tip)
     end
     setVisible(meter, device ~= nil)
   end
@@ -270,8 +303,8 @@ local function render(state)
 
   local output = state.output or {}
   local masterMuted = output.muted == true
-  setOption('MasterName', 'Text', output.name or 'No output device')
-  setOption('MasterPercent', 'Text', clampPercent(output.volume) .. '%')
+  setOption('MasterName', 'Text', compact and '' or (output.name or 'No output device'))
+  setOption('MasterPercent', 'Text', compact and '' or (clampPercent(output.volume) .. '%'))
   setOption('MasterIcon', 'Text', masterMuted and '#IconMute#' or '#IconVolume#')
   master.volume = clampPercent(output.volume)
   setVariable('MasterVol', master.volume)
@@ -291,10 +324,11 @@ local function render(state)
   renderFooter(outputs)
 
   -- The panel grows and shrinks with the number of rows (at least one slot for the empty message).
-  local dividerY = ROWS_TOP + math.max(shown, 1) * ROW_H + 4
+  local dividerY = ROWS_TOP + math.max(shown, 1) * ROW_H + DIVIDER_GAP
+  local footerY = dividerY + FOOTER_GAP
   setVariable('DividerY', dividerY)
-  setVariable('FooterY', dividerY + 14)
-  setVariable('PanelH', dividerY + 64)
+  setVariable('FooterY', footerY)
+  setVariable('PanelH', footerY + FOOTER_H + BOTTOM_PAD)
 
   SKIN:Bang('!UpdateMeter', '*')
   SKIN:Bang('!Redraw')
@@ -355,12 +389,20 @@ function Press(i, percentOfHitArea)
 end
 
 -- During a drag the helper sends the new value here: only that slider and its percentage are redrawn.
+-- A negative value means the drag is over: everything is drawn again from the state file.
 function Preview(who, value)
+  if (tonumber(value) or 0) < 0 then
+    previewing = false
+    lastRaw = nil
+    readState()
+    return
+  end
+  previewing = true
   value = clampPercent(value)
   if who == '@master' then
     master.volume = value
     setVariable('MasterVol', value)
-    SKIN:Bang('!SetOption', 'MasterPercent', 'Text', value .. '%')
+    setOption('MasterPercent', 'Text', value .. '%')
     SKIN:Bang('!UpdateMeter', 'MasterSlider')
     SKIN:Bang('!UpdateMeter', 'MasterPercent')
   else
@@ -369,9 +411,12 @@ function Preview(who, value)
       if app and app.process == who then
         app.volume = value
         setVariable('R' .. i .. 'Vol', value)
-        SKIN:Bang('!SetOption', 'R' .. i .. 'Percent', 'Text', value .. '%')
+        setOption('R' .. i .. 'Percent', 'Text', value .. '%')
+        -- compact: the percentage takes the place of the mute button while dragging
+        if compact then setOption('R' .. i .. 'Mute', 'Text', '') end
         SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Slider')
         SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Percent')
+        SKIN:Bang('!UpdateMeter', 'R' .. i .. 'Mute')
         break
       end
     end
@@ -379,6 +424,19 @@ function Preview(who, value)
   SKIN:Bang('!Redraw')
 end
 
+-- The cursor entered (on = 1) or left (on = 0) the panel: the compact layout shows the pin and the grip only then.
+function PanelHover(on)
+  panelHover = on == 1
+  if not compact then return end
+  for i = 1, MAX_ROWS do
+    local app = rows[i]
+    if app then
+      setVisible('R' .. i .. 'Pin', gutterVisible())
+      setVisible('R' .. i .. 'Grab', gutterVisible() and (app.pinned and pinnedShown or otherShown) >= 2)
+    end
+  end
+  SKIN:Bang('!Redraw')
+end
 -- Mouse wheel over a row (0 = master): direction 1 up, -1 down.
 function Wheel(i, direction)
   local who = target(i)
@@ -468,6 +526,13 @@ local function refreshAccent()
   return true
 end
 
+-- Switches between the full and the compact layout (the skin reloads to read the other layout file).
+function SetLayout(name)
+  settings.Layout = name == 'compact' and 'compact' or 'full'
+  saveSettings()
+  SKIN:Bang('!Refresh')
+end
+
 function SetAccent(name)
   if name == 'auto' then
     settings.AccentMode = 'auto'
@@ -500,7 +565,16 @@ function EditSettings()
   saveSettings()
   SKIN:Bang('["notepad.exe" "' .. SKIN:ReplaceVariables('#CURRENTPATH#Settings.inc') .. '"]')
 end
+
 function Initialize()
+  -- sizes of the layout in use
+  local function size(name, default) return tonumber(theme(name)) or default end
+  ROWS_TOP, ROW_H = size('RowsTop', ROWS_TOP), size('RowH', ROW_H)
+  SLIDER_W, HIT_PAD = size('SliderW', SLIDER_W), size('HitPad', HIT_PAD)
+  DIVIDER_GAP, FOOTER_GAP = size('DividerGap', DIVIDER_GAP), size('FooterGap', FOOTER_GAP)
+  FOOTER_H, BOTTOM_PAD = size('FooterH', FOOTER_H), size('BottomPad', BOTTOM_PAD)
+  compact = theme('Layout') == 'compact'
+
   Json = dofile(SKIN:ReplaceVariables('#CURRENTPATH#Scripts\\Json.lua'))
   statePath = SKIN:ReplaceVariables('#@#State\\state.json')
   math.randomseed(os.time())

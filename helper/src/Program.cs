@@ -75,6 +75,7 @@ namespace AppMixer
                 deviceList.Add(new Dictionary<string, object> {
                     { "alias", entry.Alias },
                     { "name", entry.Label },
+                    { "icon", entry.Icon },
                     { "available", match != null },
                     { "active", match != null && match.IsDefault }
                 });
